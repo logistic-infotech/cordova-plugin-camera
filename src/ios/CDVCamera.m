@@ -179,7 +179,44 @@ static NSString* toBase64(NSData* data) {
                  }
              }];
         } else {
-            [weakSelf showCameraPicker:command.callbackId withOptions:pictureOptions];
+            [PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus status) {
+                switch (status) {
+                    case PHAuthorizationStatusAuthorized:
+                        [weakSelf showCameraPicker:command.callbackId withOptions:pictureOptions];
+                        break;
+                    case PHAuthorizationStatusDenied:
+                    {
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            UIAlertController *alertController = [UIAlertController alertControllerWithTitle:[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"] message:NSLocalizedString(@"Access to the photo library has been prohibited; please enable it in the Settings app to continue.", nil) preferredStyle:UIAlertControllerStyleAlert];
+                            [alertController addAction:[UIAlertAction actionWithTitle:NSLocalizedString(@"OK", nil) style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+                                [weakSelf sendNoPermissionResultForGallery:command.callbackId];
+                            }]];
+                            [alertController addAction:[UIAlertAction actionWithTitle:NSLocalizedString(@"Settings", nil) style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+                                [[UIApplication sharedApplication] openURL:[NSURL URLWithString:UIApplicationOpenSettingsURLString]];
+                                [weakSelf sendNoPermissionResultForGallery:command.callbackId];
+                            }]];
+                            [weakSelf.viewController presentViewController:alertController animated:YES completion:nil];
+                        });
+                    }
+                        break;
+                    case PHAuthorizationStatusRestricted: {
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            UIAlertController *alertController = [UIAlertController alertControllerWithTitle:[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"] message:NSLocalizedString(@"Access to the photo library has been prohibited; please enable it in the Settings app to continue.", nil) preferredStyle:UIAlertControllerStyleAlert];
+                            [alertController addAction:[UIAlertAction actionWithTitle:NSLocalizedString(@"OK", nil) style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+                                [weakSelf sendNoPermissionResultForGallery:command.callbackId];
+                            }]];
+                            [alertController addAction:[UIAlertAction actionWithTitle:NSLocalizedString(@"Settings", nil) style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+                                [[UIApplication sharedApplication] openURL:[NSURL URLWithString:UIApplicationOpenSettingsURLString]];
+                                [weakSelf sendNoPermissionResultForGallery:command.callbackId];
+                            }]];
+                            [weakSelf.viewController presentViewController:alertController animated:YES completion:nil];
+                        });
+                        break;
+                    }
+                    default:
+                        break;
+                }
+            }];
         }
     }];
 }
@@ -221,6 +258,16 @@ static NSString* toBase64(NSData* data) {
 - (void)sendNoPermissionResult:(NSString*)callbackId
 {
     CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"has no access to camera"];   // error callback expects string ATM
+
+    [self.commandDelegate sendPluginResult:result callbackId:callbackId];
+
+    self.hasPendingOperation = NO;
+    self.pickerController = nil;
+}
+
+- (void)sendNoPermissionResultForGallery:(NSString*)callbackId
+{
+    CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"has no access to Gallery"];   // error callback expects string ATM
 
     [self.commandDelegate sendPluginResult:result callbackId:callbackId];
 
